@@ -47,6 +47,8 @@ jobs:
         run: |
           GIT_REPOSITORY=$(echo "${{ github.repository }}" | cut -d'/' -f2)
 
+          echo "GIT_REPOSITORY=$GIT_REPOSITORY" >> $GITHUB_ENV
+
           ECR_REPOSITORY="$ENVIRONMENT-$GIT_REPOSITORY"
 
           IMAGE_TAG="${{ github.ref_name }}-${COMMIT_SHA::7}"
@@ -67,3 +69,11 @@ jobs:
           echo "Image pushed to:"
           echo "${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }}"
           echo "${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest"
+
+      - name: Deploy ECS service 
+        run: | 
+          aws ecs update-service \ 
+          --cluster $ENVIRONMENT-ecs-cluster \ 
+          --service $GIT_REPOSITORY-service \ 
+          --force-new-deployment \ 
+          --region eu-west-1
