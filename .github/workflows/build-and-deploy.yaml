@@ -69,3 +69,5 @@ jobs:
           CLUSTER_NAME="$ENVIRONMENT-ecs-cluster"
           SERVICE_NAME="$GIT_REPOSITORY-service"
           aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment --region $AWS_REGION
+
+          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $AWS_REGION
