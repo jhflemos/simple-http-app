@@ -1,4 +1,4 @@
-name: Build and Push to ECR
+name: Continuous Integration & Deployment
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       - ".github/**"
 
 jobs:
-  build-and-push:
+  cicd:
     runs-on: ubuntu-latest
 
     permissions:
@@ -19,7 +19,7 @@ jobs:
       id-token: write  # Required for OIDC authentication if used
 
     steps:
-      - name: Checkout code
+      - name: "setup:checkout-code"
         uses: actions/checkout@v4
 
       - name: "setup:set-environment"
@@ -30,17 +30,17 @@ jobs:
             echo "ENVIRONMENT=dev" >> $GITHUB_ENV
           fi
 
-      - name: Configure AWS credentials (via OIDC)
+      - name: "setup:configure-aws-credentials"
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::748026688964:role/GitHubActionsAWSRole
           aws-region: eu-west-1
 
-      - name: Log in to Amazon ECR
+      - name: "setup:login-ecr"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to ECR
+      - name: "build:build-and-push"
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           COMMIT_SHA: ${{ github.sha }}
@@ -64,16 +64,10 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
 
-      - name: Output image URIs
-        run: |
-          echo "Image pushed to:"
-          echo "${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }}"
-          echo "${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest"
-
-      - name: Deploy ECS service 
+      - name: "setup:deploy-ecs-service"
         run: | 
           aws ecs update-service \ 
-          --cluster $ENVIRONMENT-ecs-cluster \ 
-          --service $GIT_REPOSITORY-service \ 
+          --cluster ${ENVIRONMENT}-ecs-cluster \ 
+          --service ${GIT_REPOSITORY}-service \ 
           --force-new-deployment \ 
           --region eu-west-1
