@@ -45,7 +45,9 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          ECR_REPOSITORY=$(echo "$ENVIRONMENT-${{ github.repository }}" | cut -d'/' -f2)
+          GIT_REPOSITORY=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+
+          ECR_REPOSITORY="$ENVIRONMENT-$GIT_REPOSITORY"
 
           IMAGE_TAG="${{ github.ref_name }}-${COMMIT_SHA::7}"
           IMAGE_TAG_LATEST="latest"
