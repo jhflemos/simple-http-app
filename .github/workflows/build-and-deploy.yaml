@@ -132,11 +132,8 @@ jobs:
           if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
             echo "Triggering CodeDeploy ECS canary deployment..."
 
-            APPSPEC_CONTENT=$(jq -c . appspec.json)
-
-            echo $APPSPEC_CONTENT
-
-            REVISION_JSON="{\"content\":$APPSPEC_CONTENT}"
+            APPSPEC_CONTENT=$(jq -c . appspec.json | sed 's/"/\\"/g')
+            REVISION_JSON="{\"content\":\"$APPSPEC_CONTENT\"}"
 
             aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
