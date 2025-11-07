@@ -112,7 +112,8 @@ jobs:
               --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
               --deployment-group-name $GIT_REPOSITORY-$ENVIRONMENT-canary \
               --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-              --description "Canary deployment triggered by GHA"
+              --revision "revisionType=AppSpecContent,appSpecContent={\"version\":\"0.0\",\"Resources\":[{\"TargetService\":{\"Type\":\"AWS::ECS::Service\",\"Properties\":{\"TaskDefinition\":\"$TASK_DEF_ARN\",\"LoadBalancerInfo\":{\"ContainerName\":\"app\",\"ContainerPort\":8080}}}}]}"
+
 
           else
             echo "Performing standard ECS rolling update..."
