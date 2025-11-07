@@ -97,18 +97,10 @@ jobs:
           TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://ecs-task-def-updated.json \
                           | jq -r '.taskDefinition.taskDefinitionArn')
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
-
-      - name: "deploy:deploy-ecs-service"
+      
+      - name: "buid:generate-appssec.json"
         run: |
-          CLUSTER_NAME="$ENVIRONMENT-ecs-cluster"
-          SERVICE_NAME="$GIT_REPOSITORY-$ENVIRONMENT-service"
-          TASK_DEF_ARN="$TASK_DEF_ARN"
-
-          if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
-            echo "Triggering CodeDeploy ECS canary deployment..."
-
-              # Generate appspec.json correctly (EOF at column 0)
-            cat > appspec.json <<EOF
+          cat > appspec.json <<EOF
           {
             "version": "0.0",
             "Resources": [
@@ -128,14 +120,19 @@ jobs:
           }
           EOF
 
-            # Validate JSON
-            jq . appspec.json > /dev/null
+          # Validate JSON
+          jq . appspec.json > /dev/null
 
-            APPSPEC=$(jq -c . appspec.json)
+      - name: "deploy:deploy-ecs-service"
+        run: |
+          CLUSTER_NAME="$ENVIRONMENT-ecs-cluster"
+          SERVICE_NAME="$GIT_REPOSITORY-$ENVIRONMENT-service"
+          TASK_DEF_ARN="$TASK_DEF_ARN"
 
-            echo "APPSPEC_CONTENT: $APPSPEC_CONTENT"
+          if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
+            echo "Triggering CodeDeploy ECS canary deployment..."
 
-
+            cat appspec.json
 
             aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
