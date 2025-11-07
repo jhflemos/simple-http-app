@@ -112,9 +112,7 @@ jobs:
               --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
               --deployment-group-name $GIT_REPOSITORY-$ENVIRONMENT-canary \
               --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
-              --description "Canary deployment triggered by GHA" \
-              --ecs-services clusterName=$CLUSTER_NAME,serviceName=$SERVICE_NAME \
-              --target-revision "taskDefinition=$TASK_DEF_ARN"
+              --description "Canary deployment triggered by GHA"
 
           else
             echo "Performing standard ECS rolling update..."
