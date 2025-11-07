@@ -108,24 +108,24 @@ jobs:
             echo "Triggering CodeDeploy ECS canary deployment..."
 
             cat > appspec.json <<EOF
+      {
+        "version": "0.0",
+        "Resources": [
           {
-            "version": "0.0",
-            "Resources": [
-              {
-                "TargetService": {
-                  "Type": "AWS::ECS::Service",
-                  "Properties": {
-                    "TaskDefinition": "$TASK_DEF_ARN",
-                    "LoadBalancerInfo": {
-                      "ContainerName": "app",
-                      "ContainerPort": 8080
-                    }
-                  }
+            "TargetService": {
+              "Type": "AWS::ECS::Service",
+              "Properties": {
+                "TaskDefinition": "$TASK_DEF_ARN",
+                "LoadBalancerInfo": {
+                  "ContainerName": "app",
+                  "ContainerPort": 8080
                 }
               }
-            ]
+            }
           }
-          EOF
+        ]
+      }
+      EOF
 
             APPSPEC=$(jq -c . appspec.json)
 
