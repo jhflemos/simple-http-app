@@ -132,14 +132,19 @@ jobs:
           if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
             echo "Triggering CodeDeploy ECS canary deployment..."
 
-            cat appspec.json
+            APPSPEC_CONTENT=$(jq -c . appspec.json)
+
+            echo $APPSPEC_CONTENT
+
+            REVISION_JSON="{\"content\":$APPSPEC_CONTENT}"
 
             aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
               --deployment-group-name "$GIT_REPOSITORY-$ENVIRONMENT-canary" \
               --deployment-config-name "CodeDeployDefault.ECSCanary10Percent5Minutes" \
               --description "Canary deployment triggered by GHA" \
-              --revision "revisionType=AppSpecContent,appSpecContent={\"content\":$APPSPEC_CONTENT}"
+              --revision "revisionType=AppSpecContent,appSpecContent=$REVISION_JSON"
+
             echo "CodeDeploy canary deployment triggered successfully."
 
           else
