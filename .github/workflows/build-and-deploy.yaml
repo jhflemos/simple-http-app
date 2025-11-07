@@ -107,26 +107,27 @@ jobs:
           if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
             echo "Triggering CodeDeploy ECS canary deployment..."
 
-            APPSPEC=$(cat <<EOF
-            {
-              "version": "0.0",
-              "Resources": [
-                {
-                  "TargetService": {
-                    "Type": "AWS::ECS::Service",
-                    "Properties": {
-                      "TaskDefinition": "$TASK_DEF_ARN",
-                      "LoadBalancerInfo": {
-                        "ContainerName": "app",
-                        "ContainerPort": 8080
-                      }
+            APPSPEC=$(cat <<'EOF'
+          {
+            "version": "0.0",
+            "Resources": [
+              {
+                "TargetService": {
+                  "Type": "AWS::ECS::Service",
+                  "Properties": {
+                    "TaskDefinition": "'"$TASK_DEF_ARN"'",
+                    "LoadBalancerInfo": {
+                      "ContainerName": "app",
+                      "ContainerPort": 8080
                     }
                   }
                 }
-              ]
-            }
-            EOF
-            )
+              }
+            ]
+          }
+          EOF
+          )
+
 
             aws deploy create-deployment \
               --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
