@@ -133,18 +133,9 @@ jobs:
 
             APPSPEC=$(jq -c . appspec.json)
 
-            cat > deployment.json <<EOF
-          {
-            "applicationName": "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy",
-            "deploymentGroupName": "$GIT_REPOSITORY-$ENVIRONMENT-canary",
-            "deploymentConfigName": "CodeDeployDefault.ECSCanary10Percent5Minutes",
-            "description": "Canary deployment triggered by GHA",
-            "revision": {
-              "revisionType": "AppSpecContent",
-              "appSpecContent": $(jq -c . appspec.json)
-            }
-          }
-          EOF
+            echo "APPSPEC_CONTENT: $APPSPEC_CONTENT"
+
+
 
             aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
