@@ -133,14 +133,21 @@ jobs:
             echo "Triggering CodeDeploy ECS canary deployment..."
 
             APPSPEC_CONTENT=$(jq -c . appspec.json | sed 's/"/\\"/g')
-            REVISION_JSON="{\"content\":\"$APPSPEC_CONTENT\"}"
+            cat > revision.json <<EOF
+          {
+            "revisionType": "AppSpecContent",
+            "appSpecContent": {
+              "content": "$APPSPEC_CONTENT"
+            }
+          }
+          EOF
 
             aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
               --deployment-group-name "$GIT_REPOSITORY-$ENVIRONMENT-canary" \
               --deployment-config-name "CodeDeployDefault.ECSCanary10Percent5Minutes" \
               --description "Canary deployment triggered by GHA" \
-              --revision "revisionType=AppSpecContent,appSpecContent=$REVISION_JSON"
+              --revision file://revision.json
 
             echo "CodeDeploy canary deployment triggered successfully."
 
