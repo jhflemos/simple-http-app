@@ -93,8 +93,7 @@ jobs:
               memory
             }' > ecs-task-def-updated.json
 
-
-          sed "s|<IMAGE>|$IMAGE|g" ecs-task-def.json > ecs-task-def-updated.json
+          sed -i "s|<IMAGE>|$IMAGE|g" ecs-task-def-updated.json
           TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://ecs-task-def-updated.json \
                           | jq -r '.taskDefinition.taskDefinitionArn')
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
