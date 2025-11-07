@@ -131,12 +131,14 @@ jobs:
             # Validate JSON
             jq . appspec.json > /dev/null
 
+            APPSPEC=$(jq -c . appspec.json)
+
             aws deploy create-deployment \
               --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
               --deployment-group-name $GIT_REPOSITORY-$ENVIRONMENT-canary \
               --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
               --description "Canary deployment triggered by GHA" \
-              --revision revisionType=AppSpecContent,appSpecContent=file://appspec.json
+              --revision revisionType=AppSpecContent,appSpecContent=$APPSPEC
 
             echo "CodeDeploy canary deployment triggered successfully."
 
