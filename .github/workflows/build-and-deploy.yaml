@@ -107,14 +107,34 @@ jobs:
           if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
             echo "Triggering CodeDeploy ECS canary deployment..."
 
-            # Create a CodeDeploy deployment
+            # Generate appspec.json for CodeDeploy
+            cat > appspec.json <<EOF
+          {
+            "version": "0.0",
+            "Resources": [
+              {
+                "TargetService": {
+                  "Type": "AWS::ECS::Service",
+                  "Properties": {
+                    "TaskDefinition": "$TASK_DEF_ARN",
+                    "LoadBalancerInfo": {
+                      "ContainerName": "app",
+                      "ContainerPort": 8080
+                    }
+                  }
+                }
+              }
+            ]
+          }
+          EOF
+
+            # Create CodeDeploy deployment using the file
             aws deploy create-deployment \
               --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
               --deployment-group-name $GIT_REPOSITORY-$ENVIRONMENT-canary \
               --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
               --description "Canary deployment triggered by GHA" \
-              --revision revisionType=AppSpecContent,appSpecContent="{\"version\":\"0.0\",\"Resources\":[{\"TargetService\":{\"Type\":\"AWS::ECS::Service\",\"Properties\":{\"TaskDefinition\":\"$TASK_DEF_ARN\",\"LoadBalancerInfo\":{\"ContainerName\":\"app\",\"ContainerPort\":8080}}}}]}"
-
+              --revision "revisionType=AppSpecContent,appSpecContent=file://appspec.json"
 
           else
             echo "Performing standard ECS rolling update..."
