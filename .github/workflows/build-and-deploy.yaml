@@ -39,6 +39,14 @@ jobs:
       - name: "setup:login-ecr"
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: "setup:set-deployment-strategy"
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "DEPLOYMENT_STRATEGY=canary" >> $GITHUB_ENV
+          else
+            echo "DEPLOYMENT_STRATEGY=rolling" >> $GITHUB_ENV
+          fi
 
       - name: "build:build-and-push"
         env:
@@ -49,7 +57,7 @@ jobs:
 
           echo "GIT_REPOSITORY=$GIT_REPOSITORY" >> $GITHUB_ENV
 
-          ECR_REPOSITORY="$ENVIRONMENT-$GIT_REPOSITORY"
+          ECR_REPOSITORY="$ENVIRONMENT-$GIT_REPOSITORY" >> $GITHUB_ENV
 
           IMAGE_TAG="${{ github.ref_name }}-${COMMIT_SHA::7}"
           IMAGE_TAG_LATEST="latest"
@@ -64,10 +72,53 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
 
+      - name: build:register-ecs-task-definition
+        run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          
+          aws ecs describe-task-definition \
+            --task-definition $GIT_REPOSITORY-$ENVIRONMENT-task-definition \
+            --region $AWS_REGION \
+            --query 'taskDefinition' \
+            --output json > ecs-task-def.json
+
+          sed "s|<IMAGE>|$IMAGE|g" ecs-task-def.json > ecs-task-def-updated.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://ecs-task-def-updated.json \
+                          | jq -r '.taskDefinition.taskDefinitionArn')
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+
       - name: "deploy:deploy-ecs-service"
         run: |
           CLUSTER_NAME="$ENVIRONMENT-ecs-cluster"
           SERVICE_NAME="$GIT_REPOSITORY-$ENVIRONMENT-service"
-          aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --force-new-deployment --region $AWS_REGION
+          TASK_DEF_ARN="$TASK_DEF_ARN"
 
-          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $AWS_REGION
+          if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
+            echo "Triggering CodeDeploy ECS canary deployment..."
+
+            # Create a CodeDeploy deployment
+            aws deploy create-deployment \
+              --application-name $GIT_REPOSITORY-$ENVIRONMENT-codedeploy \
+              --deployment-group-name $GIT_REPOSITORY-$ENVIRONMENT-canary \
+              --deployment-config-name CodeDeployDefault.ECSCanary10Percent5Minutes \
+              --description "Canary deployment triggered by GHA" \
+              --ecs-services clusterName=$CLUSTER_NAME,serviceName=$SERVICE_NAME \
+              --target-revision "taskDefinition=$TASK_DEF_ARN"
+
+          else
+            echo "Performing standard ECS rolling update..."
+
+            # Update ECS service with new task definition (rolling update)
+            aws ecs update-service \
+              --cluster $CLUSTER_NAME \
+              --service $SERVICE_NAME \
+              --task-definition $TASK_DEF_ARN \
+              --force-new-deployment \
+              --region $AWS_REGION
+
+            # Wait until service stabilizes
+            aws ecs wait services-stable \
+              --cluster $CLUSTER_NAME \
+              --services $SERVICE_NAME \
+              --region $AWS_REGION
+          fi
