@@ -48,6 +48,18 @@ jobs:
             echo "DEPLOYMENT_STRATEGY=rolling" >> $GITHUB_ENV
           fi
 
+      - name: "test:unit-test"
+        run: |
+          # This is an example how we can run tests before build
+          echo "Running unit-tests..."
+          echo "Unit-tests finished"
+      
+      - name: "security:snyk-scan"
+        run: |
+          # This is an example how we can run security scan before build
+          echo "Running security scan..."
+          echo "Security scan finished"
+
       - name: "build:build-and-push"
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -142,14 +154,36 @@ jobs:
           }
           EOF
 
-            aws deploy create-deployment \
+            DEPLOYMENT_ID=$(aws deploy create-deployment \
               --application-name "$GIT_REPOSITORY-$ENVIRONMENT-codedeploy" \
               --deployment-group-name "$GIT_REPOSITORY-$ENVIRONMENT-canary" \
               --deployment-config-name "CodeDeployDefault.ECSCanary10Percent5Minutes" \
               --description "Canary deployment triggered by GHA" \
-              --revision file://revision.json
+              --revision file://revision.json \
+              | jq -r '.deploymentId')
 
-            echo "CodeDeploy canary deployment triggered successfully."
+            echo "Deployment started: $DEPLOYMENT_ID"
+            #echo "Waiting for deployment to complete..."
+
+            # Poll until the deployment succeeds or fails
+            #while true; do
+            #  STATUS=$(aws deploy get-deployment --deployment-id $DEPLOYMENT_ID \
+            #          | jq -r '.deploymentInfo.status')
+              
+            #  echo "Current status: $STATUS"
+
+            #  if [[ "$STATUS" == "Succeeded" ]]; then
+            #    echo "Deployment succeeded!"
+            #    break
+            #  elif [[ "$STATUS" == "Failed" ]] || [[ "$STATUS" == "Stopped" ]]; then
+            #    echo "Deployment failed or stopped!"
+            #    exit 1
+            #  else
+            #    sleep 15
+            #  fi
+            #done
+
+            #echo "CodeDeploy canary deployment triggered successfully."
 
           else
             echo "Performing standard ECS rolling update..."
