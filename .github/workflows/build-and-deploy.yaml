@@ -11,43 +11,12 @@ on:
       - ".github/**"
 
 jobs:
-  cicd:
+  pre-build:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      id-token: write  # Required for OIDC authentication if used
-
     steps:
       - name: "setup:checkout-code"
         uses: actions/checkout@v4
-
-      - name: "setup:set-environment"
-        run: |
-          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
-          else
-            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
-          fi
-
-      - name: "setup:configure-aws-credentials"
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::748026688964:role/GitHubActionsAWSRole
-          aws-region: eu-west-1
-
-      - name: "setup:login-ecr"
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
       
-      - name: "setup:set-deployment-strategy"
-        run: |
-          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-            echo "DEPLOYMENT_STRATEGY=canary" >> $GITHUB_ENV
-          else
-            echo "DEPLOYMENT_STRATEGY=rolling" >> $GITHUB_ENV
-          fi
-
       - name: "test:unit-test"
         run: |
           # This is an example how we can run tests before build
@@ -59,7 +28,38 @@ jobs:
           # This is an example how we can run security scan before build
           echo "Running security scan..."
           echo "Security scan finished"
+  build:
+    runs-on: ubuntu-latest
+    needs: [pre-build]
+    outputs:
+      task_definition: ${{ steps.task-definition.outputs.task_definition }}
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication if used
 
+    steps:
+      - name: "setup:checkout-code"
+        uses: actions/checkout@v4
+
+      - name: "setup:set-environment"
+        id: set-environment
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          fi
+
+      - name: "setup:configure-aws-credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/GitHubActionsAWSRole
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: "setup:login-ecr"
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
       - name: "build:build-and-push"
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -85,6 +85,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
 
       - name: build:register-ecs-task-definition
+        id: task-definition
         run: |
           IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
           
@@ -106,9 +107,11 @@ jobs:
             }' > ecs-task-def-updated.json
 
           sed -i "s|<IMAGE>|$IMAGE|g" ecs-task-def-updated.json
-          TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://ecs-task-def-updated.json \
-                          | jq -r '.taskDefinition.taskDefinitionArn')
+
+          TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://ecs-task-def-updated.json | jq -r '.taskDefinition.taskDefinitionArn')
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+
+          echo "task_definition=$(basename "$TASK_DEF_ARN")" >> $GITHUB_OUTPUT
       
       - name: "buid:generate-appssec.json"
         run: |
@@ -135,13 +138,64 @@ jobs:
           # Validate JSON
           jq . appspec.json > /dev/null
 
+      - name: 'artifact:appspec:upload'
+        uses: actions/upload-artifact@v5
+        with:
+          name: appspec
+          path: appspec.json
+          overwrite: true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication if used
+
+    steps:
+      - name: "setup:checkout-code"
+        uses: actions/checkout@v4
+
+      - name: "setup:configure-aws-credentials"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/GitHubActionsAWSRole
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 'artifact:appspec:download'
+        uses: actions/download-artifact@v5
+        with:
+          name: appspec
+      
+      - name: "setup:set-environment"
+        id: set-environment
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          fi
+
+      - name: "setup:set-deployment-strategy"
+        id: set-strategy
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            echo "DEPLOYMENT_STRATEGY=canary" >> $GITHUB_ENV
+          else
+            echo "DEPLOYMENT_STRATEGY=rolling" >> $GITHUB_ENV
+          fi
+
       - name: "deploy:deploy-ecs-service"
         run: |
+          GIT_REPOSITORY=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+
           CLUSTER_NAME="$ENVIRONMENT-ecs-cluster"
           SERVICE_NAME="$GIT_REPOSITORY-$ENVIRONMENT-service"
-          TASK_DEF_ARN="$TASK_DEF_ARN"
+          TASK_DEF_ARN="arn:aws:ecs:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT }}:task-definition/${{ needs.build.outputs.task_definition }}"
 
-          if [[ "${DEPLOYMENT_STRATEGY}" == "canary" ]]; then
+          ls -la
+
+          if [[ "$DEPLOYMENT_STRATEGY" == "canary" ]]; then
             echo "Triggering CodeDeploy ECS canary deployment..."
 
             APPSPEC_CONTENT=$(jq -c . appspec.json | sed 's/"/\\"/g')
