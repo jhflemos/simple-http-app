@@ -231,22 +231,21 @@ jobs:
             #echo "Waiting for deployment to complete..."
 
             # Poll until the deployment succeeds or fails
-            #while true; do
-            #  STATUS=$(aws deploy get-deployment --deployment-id $DEPLOYMENT_ID \
-            #          | jq -r '.deploymentInfo.status')
-              
-            #  echo "Current status: $STATUS"
-
-            #  if [[ "$STATUS" == "Succeeded" ]]; then
-            #    echo "Deployment succeeded!"
-            #    break
-            #  elif [[ "$STATUS" == "Failed" ]] || [[ "$STATUS" == "Stopped" ]]; then
-            #    echo "Deployment failed or stopped!"
-            #    exit 1
-            #  else
-            #    sleep 15
-            #  fi
-            #done
+            while true; do
+              STATUS=$(aws deploy get-deployment --deployment-id $DEPLOYMENT_ID \
+                      | jq -r '.deploymentInfo.status')
+             
+              echo "Current status: $STATUS"
+              if [[ "$STATUS" == "Succeeded" ]]; then
+                echo "Deployment succeeded!"
+                break
+              elif [[ "$STATUS" == "Failed" ]] || [[ "$STATUS" == "Stopped" ]]; then
+                echo "Deployment failed or stopped!"
+                exit 1
+              else
+                sleep 15
+              fi
+            done
 
             #echo "CodeDeploy canary deployment triggered successfully."
 
